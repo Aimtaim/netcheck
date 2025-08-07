@@ -5,7 +5,12 @@
 # =============================================================================
 
 # UI-Konfiguration basierend auf Terminal-Features
-declare -A UI_CONFIG
+declare -A UI_CONFIG=(
+    [use_colors]="false"
+    [use_unicode]="false"
+    [width]="80"
+    [use_progress]="true"
+)
 
 # =============================================================================
 # UI Initialisierung
