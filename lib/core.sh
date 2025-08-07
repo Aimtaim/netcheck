@@ -17,7 +17,10 @@ LOG_FILE=""
 LOG_LEVEL="INFO"
 
 log_init() {
-    LOG_FILE="$1"
+    if [[ -z "$LOG_FILE" ]]; then
+        LOG_FILE="$1"
+    fi
+
     LOG_LEVEL="${2:-INFO}"
     
     # Log-Datei erstellen
