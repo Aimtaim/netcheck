@@ -18,23 +18,21 @@ is_macos() {
 check_macos_version() {
     # Auch auf Non-macOS basic info sammeln
     if ! is_macos; then
-        local os_version
-        os_version="$(uname -r)"
+        local os_version="$(uname -r || echo 'unknown')"
         SYSTEM_INFO[os_version]="$os_version"
-        SYSTEM_INFO[os_major]="0"
+        # Für Non-macOS: Verwende sichere Standardwerte
+        SYSTEM_INFO[os_major]="1"
         SYSTEM_INFO[os_minor]="0"
         log_info "Non-macOS System erkannt: $(uname -s) $os_version"
         return 0
     fi
     
-    local os_version major minor
-    os_version=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
-    local major minor
-    major=$(echo "$os_version" | cut -d. -f1)
-    minor=$(echo "$os_version" | cut -d. -f2)
+    local os_version="$(sw_vers -productVersion 2>/dev/null || echo 'unknown')"
+    local major="$(echo "$os_version" | cut -d. -f1 || echo '0')"
+    local minor="$(echo "$os_version" | cut -d. -f2 || echo '0')"
     
     # macOS 10.13 oder neuer erforderlich
-    if [[ $major -eq 10 && $minor -lt 13 ]] || [[ $major -lt 10 ]]; then
+    if [[ "${major:-0}" -eq 10 && "${minor:-0}" -lt 13 ]] || [[ "${major:-0}" -lt 10 ]]; then
         log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
         return 0
     fi
@@ -48,12 +46,18 @@ check_macos_version() {
 }
 
 get_macos_codename() {
-    local os_version="${SYSTEM_INFO[os_version]:-unknown}"
-    local major="${SYSTEM_INFO[os_major]:-0}"
+    local os_version="${SYSTEM_INFO[os_version]:-'unknown'}"
+    local major="${SYSTEM_INFO[os_major]:-1}"
     local minor="${SYSTEM_INFO[os_minor]:-0}"
     
-    if [[ $major -ge 11 ]]; then
-        case $major in
+    # Nur für macOS Codenamen
+    if ! is_macos; then
+        echo "Non-macOS ($(uname -s))"
+        return
+    fi
+    
+    if [[ "${major:-1}" -ge 11 ]]; then
+        case "${major:-1}" in
             14) echo "Sonoma" ;;
             13) echo "Ventura" ;;
             12) echo "Monterey" ;;
@@ -61,7 +65,7 @@ get_macos_codename() {
             *) echo "Unknown ($os_version)" ;;
         esac
     else
-        case "$major.$minor" in
+        case "${major:-1}.${minor:-0}" in
             10.15) echo "Catalina" ;;
             10.14) echo "Mojave" ;;
             10.13) echo "High Sierra" ;;
@@ -218,11 +222,16 @@ detect_network_interfaces() {
 # =============================================================================
 
 supports_modern_wifi_api() {
-    local major="${SYSTEM_INFO[os_major]}"
-    local minor="${SYSTEM_INFO[os_minor]}"
+    local major="${SYSTEM_INFO[os_major]:-1}"
+    local minor="${SYSTEM_INFO[os_minor]:-0}"
+    
+    # Nur auf macOS verfügbar
+    if ! is_macos; then
+        return 1
+    fi
     
     # macOS 10.14+ hat modernere WiFi APIs
-    if [[ $major -ge 11 ]] || [[ $major -eq 10 && $minor -ge 14 ]]; then
+    if [[ "${major:-1}" -ge 11 ]] || [[ "${major:-1}" -eq 10 && "${minor:-0}" -ge 14 ]]; then
         return 0
     fi
     return 1
@@ -249,10 +258,16 @@ get_legacy_wifi_tool() {
 }
 
 get_firewall_command() {
-    local major="${SYSTEM_INFO[os_major]}"
+    local major="${SYSTEM_INFO[os_major]:-1}"
+    
+    # Non-macOS Systeme
+    if ! is_macos; then
+        echo "iptables"
+        return
+    fi
     
     # macOS 11+ verwendet socketfilterfw anders
-    if [[ $major -ge 11 ]]; then
+    if [[ "${major:-1}" -ge 11 ]]; then
         echo "socketfilterfw"
     else
         echo "pfctl"
