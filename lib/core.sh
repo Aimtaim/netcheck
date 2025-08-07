@@ -14,7 +14,12 @@ RED=''
 GREEN=''
 YELLOW=''
 BLUE=''
+CYAN=''
+WHITE=''
+GRAY=''
 NC=''
+BOLD=''
+DIM=''
 
 # =============================================================================
 # Logging System
@@ -25,17 +30,21 @@ LOG_LEVEL="INFO"
 
 log_init() {
     # LOG_FILE wird in netcheck.sh gesetzt, hier nur verwenden
-    [[ -n "$1" ]] && LOG_FILE="$1"
+    if [[ -n "${1:-}" ]]; then
+        LOG_FILE="$1"
+    fi
     LOG_LEVEL="${2:-INFO}"
     
     # Log-Datei erstellen
-    cat > "$LOG_FILE" << EOF
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        cat > "$LOG_FILE" << EOF
 # NetCheck Log - $(date '+%Y-%m-%d %H:%M:%S')
 # Version: $VERSION
 # System: $(uname -a)
 # User: $(whoami)
 # PID: $$
 EOF
+    fi
 }
 
 log_message() {
@@ -44,7 +53,9 @@ log_message() {
     local timestamp
     timestamp=$(date '+%H:%M:%S')
     
-    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    fi
     
     # Debug Output falls aktiviert
     if [[ "${NETCHECK_DEBUG:-}" == "1" ]]; then
