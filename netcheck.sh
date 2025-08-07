@@ -15,7 +15,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly LIB_DIR="${SCRIPT_DIR}/lib"
 readonly CONFIG_DIR="${SCRIPT_DIR}/config"
 readonly TEMP_DIR="/tmp/netcheck_$$"
-readonly LOG_FILE="${TEMP_DIR}/netcheck.log"
+LOG_FILE="${TEMP_DIR}/netcheck.log"
 
 # Sicherstellen dass temp dir existiert
 mkdir -p "$TEMP_DIR"
