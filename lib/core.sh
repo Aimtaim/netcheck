@@ -1,41 +1,39 @@
 #!/bin/bash
-# core.sh
-
-# Farben
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
 
 # =============================================================================
+# NetCheck Core - Grundlegende Funktionen und Utilities
+# =============================================================================
+
 # Globale Arrays für Ergebnisse
-# =============================================================================
-
 declare -a NETCHECK_ISSUES=()
 declare -a NETCHECK_FIXES=()
 declare -a NETCHECK_TEST_RESULTS=()
+
+# Farben für Ausgaben (werden in ui_init überschrieben falls verfügbar)
+RED=''
+GREEN=''
+YELLOW=''
+BLUE=''
+NC=''
 
 # =============================================================================
 # Logging System
 # =============================================================================
 
-# Diese Variablen werden ggf. durch das Hauptskript gesetzt
+LOG_FILE=""
 LOG_LEVEL="INFO"
 
 log_init() {
-    LOG_LEVEL="${2:-INFO}"
-
-    if [[ -z "${LOG_FILE:-}" ]]; then
-        echo "FEHLER: LOG_FILE wurde nicht gesetzt." >&2
-        exit 1
+    # Nur setzen wenn noch nicht gesetzt (verhindert readonly-Fehler)
+    if [[ -z "$LOG_FILE" ]]; then
+        LOG_FILE="$1"
     fi
-
-
+    LOG_LEVEL="${2:-INFO}"
+    
     # Log-Datei erstellen
     cat > "$LOG_FILE" << EOF
 # NetCheck Log - $(date '+%Y-%m-%d %H:%M:%S')
-# Version: ${VERSION:-unknown}
+# Version: $VERSION
 # System: $(uname -a)
 # User: $(whoami)
 # PID: $$
@@ -69,6 +67,12 @@ die() {
     local message="$1"
     log_error "$message"
     
+    # Stelle sicher dass Farben verfügbar sind
+    if [[ -z "$RED" ]] && [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        RED='\033[0;31m'
+        NC='\033[0m'
+    fi
+    
     if [[ "$JSON_MODE" == true ]]; then
         echo '{"error": "'"$message"'", "timestamp": "'"$(date -Iseconds)"'"}'
     else
@@ -81,6 +85,12 @@ die() {
 warn() {
     local message="$1"
     log_warn "$message"
+    
+    # Stelle sicher dass Farben verfügbar sind
+    if [[ -z "$YELLOW" ]] && [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        YELLOW='\033[1;33m'
+        NC='\033[0m'
+    fi
     
     if [[ "$JSON_MODE" != true ]] && [[ "$SILENT_MODE" != true ]]; then
         echo -e "${YELLOW}WARNUNG:${NC} $message" >&2
