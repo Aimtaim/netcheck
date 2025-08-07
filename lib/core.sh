@@ -21,7 +21,6 @@ log_init() {
         LOG_FILE="$1"
     fi
 
-    LOG_LEVEL="${2:-INFO}"
     
     # Log-Datei erstellen
     cat > "$LOG_FILE" << EOF
