@@ -273,19 +273,16 @@ execute_fix() {
 flush_dns_cache() {
     log_debug "Leere DNS-Cache..."
     
-    # macOS Version-spezifische Befehle
-    local major="${SYSTEM_INFO[os_major]}"
-    local minor="${SYSTEM_INFO[os_minor]}"
-    
-    if [[ $major -ge 11 ]] || [[ $major -eq 10 && $minor -ge 15 ]]; then
-        # macOS 10.15+
-        sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder
-    elif [[ $major -eq 10 && $minor -ge 10 ]]; then
-        # macOS 10.10-10.14
+    if is_macos; then
+        # macOS DNS Cache
         sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder
     else
-        # Ältere Versionen
-        sudo dscacheutil -flushcache
+        # Linux DNS Cache
+        if command -v systemctl >/dev/null 2>&1; then
+            sudo systemctl restart systemd-resolved 2>/dev/null || true
+        elif command -v service >/dev/null 2>&1; then
+            sudo service networking restart 2>/dev/null || true
+        fi
     fi
 }
 
@@ -294,13 +291,22 @@ renew_network_config() {
     
     local primary_interface="${SYSTEM_INFO[primary_interface]}"
     if [[ -n "$primary_interface" ]]; then
-        # DHCP-Lease erneuern
-        sudo networksetup -renewdhcp "$primary_interface" 2>/dev/null || {
-            # Fallback: Interface down/up
-            sudo ifconfig "$primary_interface" down
-            sleep 2
-            sudo ifconfig "$primary_interface" up
-        }
+        if is_macos; then
+            # macOS DHCP renewal
+            sudo networksetup -renewdhcp "$primary_interface" 2>/dev/null
+        else
+            # Linux interface restart
+            if command -v ip >/dev/null 2>&1; then
+                sudo ip link set "$primary_interface" down
+                sleep 2
+                sudo ip link set "$primary_interface" up
+                # DHCP renewal on Linux
+                if command -v dhclient >/dev/null 2>&1; then
+                    sudo dhclient -r "$primary_interface" 2>/dev/null || true
+                    sudo dhclient "$primary_interface" 2>/dev/null || true
+                fi
+            fi
+        fi
     else
         return 1
     fi
@@ -309,19 +315,25 @@ renew_network_config() {
 reset_wifi_connection() {
     log_debug "Setze WiFi-Verbindung zurück..."
     
-    local wifi_interface
-    wifi_interface=$(get_wifi_interface)
-    
-    if [[ -n "$wifi_interface" ]]; then
-        # WiFi ausschalten und wieder einschalten
-        networksetup -setairportpower "$wifi_interface" off
-        sleep 3
-        networksetup -setairportpower "$wifi_interface" on
-        sleep 5
-        return 0
+    if is_macos; then
+        local wifi_interface
+        wifi_interface=$(get_wifi_interface)
+        
+        if [[ -n "$wifi_interface" ]]; then
+            networksetup -setairportpower "$wifi_interface" off
+            sleep 3
+            networksetup -setairportpower "$wifi_interface" on
+            sleep 5
+            return 0
+        fi
     else
-        return 1
+        # Linux WiFi restart
+        if command -v systemctl >/dev/null 2>&1; then
+            sudo systemctl restart NetworkManager 2>/dev/null || true
+            return 0
+        fi
     fi
+    return 1
 }
 
 renew_wifi_dns() {
