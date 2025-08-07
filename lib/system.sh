@@ -16,59 +16,61 @@ is_macos() {
 }
 
 check_macos_version() {
-    # Auch auf Non-macOS basic info sammeln
     if ! is_macos; then
-        local os_version="unknown"
-        if command -v uname >/dev/null 2>&1; then
-            os_version="$(uname -r 2>/dev/null || echo 'unknown')"
-        fi
-        SYSTEM_INFO[os_version]="$os_version"
-        # Für Non-macOS: Verwende sichere Standardwerte
+        # Non-macOS: Sichere Defaults ohne arithmetische Operationen
+        SYSTEM_INFO[os_version]="$(uname -r 2>/dev/null || echo 'unknown')"
         SYSTEM_INFO[os_major]="0"
         SYSTEM_INFO[os_minor]="0"
         log_info "Non-macOS System erkannt: $(uname -s) $os_version"
         return 0
     fi
     
-    local os_version="unknown" 
-    local major="0"
-    local minor="0"
+    # macOS Version ermitteln
+    local os_version major minor
+    os_version="unknown"
+    major="0"  
+    minor="0"
     
     if command -v sw_vers >/dev/null 2>&1; then
         os_version="$(sw_vers -productVersion 2>/dev/null || echo 'unknown')"
         if [[ "$os_version" != "unknown" ]]; then
-            major="$(echo "$os_version" | cut -d. -f1 2>/dev/null || echo '0')"
-            minor="$(echo "$os_version" | cut -d. -f2 2>/dev/null || echo '0')"
+            local temp_major temp_minor
+            temp_major="$(echo "$os_version" | cut -d. -f1 2>/dev/null || echo '0')"
+            temp_minor="$(echo "$os_version" | cut -d. -f2 2>/dev/null || echo '0')"
+            
+            # Nur numerische Werte verwenden
+            if [[ "$temp_major" =~ ^[0-9]+$ ]]; then
+                major="$temp_major"
+            fi
+            if [[ "$temp_minor" =~ ^[0-9]+$ ]]; then
+                minor="$temp_minor"  
+            fi
         fi
     fi
     
-    # Version prüfen nur für echte macOS Systeme mit numerischen Werten
-    # Verwende String-Vergleiche statt arithmetische Operationen
-    case "$major" in
-        [0-9]|[0-9][0-9])
-            case "$minor" in
-                [0-9]|[0-9][0-9])
-                    # Nur dann prüfen wenn beide numerisch sind
-                    if (( major < 10 || (major == 10 && minor < 13) )); then
-                        log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
-                    fi
-                    ;;
-            esac
-            ;;
-    esac
+    # Versionsprüfung für macOS (ohne arithmetische Operationen)
+    if [[ "$major" == "10" ]] && [[ "$minor" =~ ^(0|1|2|3|4|5|6|7|8|9|10|11|12)$ ]]; then
+        log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
+    fi
     
-    SYSTEM_INFO[os_version]="${os_version}"
-    SYSTEM_INFO[os_major]="${major}"
-    SYSTEM_INFO[os_minor]="${minor}"
+    SYSTEM_INFO[os_version]="$os_version"
+    SYSTEM_INFO[os_major]="$major"
+    SYSTEM_INFO[os_minor]="$minor"
     
     log_info "macOS Version erkannt: $os_version"
     return 0
 }
 
 get_macos_codename() {
-    local os_version="${SYSTEM_INFO[os_version]:-'unknown'}"
-    local major="${SYSTEM_INFO[os_major]:-1}"
-    local minor="${SYSTEM_INFO[os_minor]:-0}"
+    local os_version major minor
+    os_version="${SYSTEM_INFO[os_version]}"
+    major="${SYSTEM_INFO[os_major]}"
+    minor="${SYSTEM_INFO[os_minor]}"
+    
+    # Defaults setzen
+    [[ -z "$os_version" ]] && os_version="unknown"
+    [[ -z "$major" ]] && major="1"
+    [[ -z "$minor" ]] && minor="0"
     
     # Nur für macOS Codenamen
     if ! is_macos; then
@@ -76,8 +78,8 @@ get_macos_codename() {
         return
     fi
     
-    if [[ "${major:-1}" -ge 11 ]]; then
-        case "${major:-1}" in
+    if [[ "$major" =~ ^(1[1-9]|[2-9][0-9])$ ]]; then
+        case "$major" in
             14) echo "Sonoma" ;;
             13) echo "Ventura" ;;
             12) echo "Monterey" ;;
@@ -85,7 +87,7 @@ get_macos_codename() {
             *) echo "Unknown ($os_version)" ;;
         esac
     else
-        case "${major:-1}.${minor:-0}" in
+        case "$major.$minor" in
             10.15) echo "Catalina" ;;
             10.14) echo "Mojave" ;;
             10.13) echo "High Sierra" ;;
@@ -242,28 +244,33 @@ detect_network_interfaces() {
 # =============================================================================
 
 supports_modern_wifi_api() {
-    local major="${SYSTEM_INFO[os_major]}"
-    local minor="${SYSTEM_INFO[os_minor]}"
+    local major minor
+    major="${SYSTEM_INFO[os_major]}"
+    minor="${SYSTEM_INFO[os_minor]}"
     
     # Nur auf macOS verfügbar
     if ! is_macos; then
         return 1
     fi
     
-    # Sichere numerische Prüfung ohne arithmetische Operationen
-    case "$major" in
-        ''|*[!0-9]*) return 1 ;;
-    esac
-    case "$minor" in  
-        ''|*[!0-9]*) return 1 ;;
-    esac
+    # Defaults und Validierung
+    [[ -z "$major" ]] && major="0"
+    [[ -z "$minor" ]] && minor="0"
     
-    # Verwende (( )) für sichere arithmetische Vergleiche
-    if (( major >= 11 || (major == 10 && minor >= 14) )); then
-        return 0
-    else
-        return 1
+    # Prüfung ob numerisch
+    [[ ! "$major" =~ ^[0-9]+$ ]] && return 1
+    [[ ! "$minor" =~ ^[0-9]+$ ]] && return 1
+    
+    # Version-Check ohne arithmetische Operationen
+    if [[ "$major" =~ ^(1[1-9]|[2-9][0-9])$ ]]; then
+        return 0  # macOS 11+
+    elif [[ "$major" == "10" ]]; then
+        if [[ "$minor" =~ ^(1[4-9]|[2-9][0-9])$ ]]; then
+            return 0  # macOS 10.14+
+        fi
     fi
+    
+    return 1
 }
 
 supports_system_profiler() {
