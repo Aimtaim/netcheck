@@ -18,10 +18,11 @@ is_macos() {
 check_macos_version() {
     # Auch auf Non-macOS basic info sammeln
     if ! is_macos; then
-        SYSTEM_INFO[os_version]="$(uname -r)"
+        local version="$(uname -r)"
+        SYSTEM_INFO[os_version]="$version"
         SYSTEM_INFO[os_major]="0"
         SYSTEM_INFO[os_minor]="0"
-        log_info "Non-macOS System erkannt: $(uname -s) $(uname -r)"
+        log_info "Non-macOS System erkannt: $(uname -s) $version"
         return 0
     fi
     
@@ -46,9 +47,9 @@ check_macos_version() {
 }
 
 get_macos_codename() {
-    local version="${SYSTEM_INFO[os_version]}"
-    local major="${SYSTEM_INFO[os_major]}"
-    local minor="${SYSTEM_INFO[os_minor]}"
+    local version="${SYSTEM_INFO[os_version]:-unknown}"
+    local major="${SYSTEM_INFO[os_major]:-0}"
+    local minor="${SYSTEM_INFO[os_minor]:-0}"
     
     if [[ $major -ge 11 ]]; then
         case $major in
@@ -150,22 +151,36 @@ detect_network_interfaces() {
     local ethernet_interfaces=()
     
     # Alle Hardware Ports scannen
-    while IFS= read -r line; do
-        if [[ "$line" =~ Hardware\ Port:\ (.*)$ ]]; then
-            local port_name="${BASH_REMATCH[1]}"
-            read -r device_line
-            if [[ "$device_line" =~ Device:\ (.*)$ ]]; then
-                local device="${BASH_REMATCH[1]}"
-                interfaces+=("$device")
-                
-                if [[ "$port_name" =~ Wi-Fi|AirPort ]]; then
-                    wifi_interfaces+=("$device")
-                elif [[ "$port_name" =~ Ethernet|Thunderbolt|USB ]]; then
-                    ethernet_interfaces+=("$device")
+    if command -v networksetup &> /dev/null; then
+        while IFS= read -r line; do
+            if [[ "$line" =~ Hardware\ Port:\ (.*)$ ]]; then
+                local port_name="${BASH_REMATCH[1]}"
+                read -r device_line
+                if [[ "$device_line" =~ Device:\ (.*)$ ]]; then
+                    local device="${BASH_REMATCH[1]}"
+                    interfaces+=("$device")
+                    
+                    if [[ "$port_name" =~ Wi-Fi|AirPort ]]; then
+                        wifi_interfaces+=("$device")
+                    elif [[ "$port_name" =~ Ethernet|Thunderbolt|USB ]]; then
+                        ethernet_interfaces+=("$device")
+                    fi
                 fi
             fi
-        fi
-    done < <(networksetup -listallhardwareports 2>/dev/null || echo "")
+        done < <(networksetup -listallhardwareports 2>/dev/null || echo "")
+    else
+        # Fallback für Non-macOS: Verwende Standard-Interfaces
+        for iface in eth0 eth1 wlan0 wlan1 enp0s3 enp0s8; do
+            if [[ -d "/sys/class/net/$iface" ]]; then
+                interfaces+=("$iface")
+                if [[ "$iface" =~ wlan|wlp ]]; then
+                    wifi_interfaces+=("$iface")
+                else
+                    ethernet_interfaces+=("$iface")
+                fi
+            fi
+        done
+    fi
     
     # Als komma-separierte Strings speichern
     SYSTEM_INFO[all_interfaces]=$(IFS=','; echo "${interfaces[*]}")
