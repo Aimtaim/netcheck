@@ -18,36 +18,37 @@ is_macos() {
 check_macos_version() {
     # Auch auf Non-macOS basic info sammeln
     if ! is_macos; then
-        local version="$(uname -r)"
-        SYSTEM_INFO[os_version]="$version"
+        local os_version
+        os_version="$(uname -r)"
+        SYSTEM_INFO[os_version]="$os_version"
         SYSTEM_INFO[os_major]="0"
         SYSTEM_INFO[os_minor]="0"
-        log_info "Non-macOS System erkannt: $(uname -s) $version"
+        log_info "Non-macOS System erkannt: $(uname -s) $os_version"
         return 0
     fi
     
-    local version
-    version=$(sw_vers -productVersion)
+    local os_version major minor
+    os_version=$(sw_vers -productVersion 2>/dev/null || echo "unknown")
     local major minor
-    major=$(echo "$version" | cut -d. -f1)
-    minor=$(echo "$version" | cut -d. -f2)
+    major=$(echo "$os_version" | cut -d. -f1)
+    minor=$(echo "$os_version" | cut -d. -f2)
     
     # macOS 10.13 oder neuer erforderlich
     if [[ $major -eq 10 && $minor -lt 13 ]] || [[ $major -lt 10 ]]; then
-        log_warn "Alte macOS Version: $version (empfohlen: 10.13+)"
+        log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
         return 0
     fi
     
-    SYSTEM_INFO[os_version]="$version"
+    SYSTEM_INFO[os_version]="$os_version"
     SYSTEM_INFO[os_major]="$major"
     SYSTEM_INFO[os_minor]="$minor"
     
-    log_info "macOS Version erkannt: $version"
+    log_info "macOS Version erkannt: $os_version"
     return 0
 }
 
 get_macos_codename() {
-    local version="${SYSTEM_INFO[os_version]:-unknown}"
+    local os_version="${SYSTEM_INFO[os_version]:-unknown}"
     local major="${SYSTEM_INFO[os_major]:-0}"
     local minor="${SYSTEM_INFO[os_minor]:-0}"
     
@@ -57,14 +58,14 @@ get_macos_codename() {
             13) echo "Ventura" ;;
             12) echo "Monterey" ;;
             11) echo "Big Sur" ;;
-            *) echo "Unknown ($version)" ;;
+            *) echo "Unknown ($os_version)" ;;
         esac
     else
         case "$major.$minor" in
             10.15) echo "Catalina" ;;
             10.14) echo "Mojave" ;;
             10.13) echo "High Sierra" ;;
-            *) echo "Unknown ($version)" ;;
+            *) echo "Unknown ($os_version)" ;;
         esac
     fi
 }
@@ -76,24 +77,30 @@ get_macos_codename() {
 system_gather_info() {
     log_info "Sammle System-Informationen..."
     
+    # Variablen initialisieren
+    local hostname username uptime architecture
+    local model cpu memory
+    
     # Basic System Info
-    SYSTEM_INFO[hostname]=$(hostname)
-    SYSTEM_INFO[username]=$(whoami)
-    SYSTEM_INFO[uptime]=$(uptime | awk '{print $3,$4}' | sed 's/,//')
-    SYSTEM_INFO[architecture]=$(uname -m)
+    hostname=$(hostname 2>/dev/null || echo "unknown")
+    username=$(whoami 2>/dev/null || echo "unknown")
+    uptime=$(uptime 2>/dev/null | awk '{print $3,$4}' | sed 's/,//' || echo "unknown")
+    architecture=$(uname -m 2>/dev/null || echo "unknown")
+    
+    SYSTEM_INFO[hostname]="$hostname"
+    SYSTEM_INFO[username]="$username"
+    SYSTEM_INFO[uptime]="$uptime"
+    SYSTEM_INFO[architecture]="$architecture"
     
     # Hardware Info
     if command -v system_profiler &> /dev/null; then
-        local model
-        model=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | cut -d: -f2 | trim)
+        model=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | cut -d: -f2 | trim || echo "Unknown")
         SYSTEM_INFO[model]="${model:-Unknown}"
         
-        local cpu
-        cpu=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Processor Name" | cut -d: -f2 | trim)
+        cpu=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Processor Name" | cut -d: -f2 | trim || echo "Unknown")
         SYSTEM_INFO[cpu]="${cpu:-Unknown}"
         
-        local memory
-        memory=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Memory" | cut -d: -f2 | trim)
+        memory=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Memory" | cut -d: -f2 | trim || echo "Unknown")
         SYSTEM_INFO[memory]="${memory:-Unknown}"
     else
         log_warn "system_profiler nicht verfügbar, Hardware-Info begrenzt"
@@ -112,6 +119,9 @@ system_gather_info() {
 }
 
 detect_terminal_capabilities() {
+    # Variablen initialisieren
+    local terminal_width terminal_height
+    
     # Farben
     if [[ -t 1 ]] && [[ "${TERM:-}" != "dumb" ]] && [[ "$NO_COLOR" != true ]]; then
         SYSTEM_INFO[supports_color]="true"
@@ -135,8 +145,10 @@ detect_terminal_capabilities() {
     
     # Terminal Größe
     if command -v tput &> /dev/null; then
-        SYSTEM_INFO[terminal_width]=$(tput cols 2>/dev/null || echo "80")
-        SYSTEM_INFO[terminal_height]=$(tput lines 2>/dev/null || echo "24")
+        terminal_width=$(tput cols 2>/dev/null || echo "80")
+        terminal_height=$(tput lines 2>/dev/null || echo "24")
+        SYSTEM_INFO[terminal_width]="$terminal_width"
+        SYSTEM_INFO[terminal_height]="$terminal_height"
     else
         SYSTEM_INFO[terminal_width]="80"
         SYSTEM_INFO[terminal_height]="24"
@@ -149,15 +161,16 @@ detect_network_interfaces() {
     local interfaces=()
     local wifi_interfaces=()
     local ethernet_interfaces=()
+    local port_name device
     
     # Alle Hardware Ports scannen
     if command -v networksetup &> /dev/null; then
         while IFS= read -r line; do
             if [[ "$line" =~ Hardware\ Port:\ (.*)$ ]]; then
-                local port_name="${BASH_REMATCH[1]}"
+                port_name="${BASH_REMATCH[1]}"
                 read -r device_line
                 if [[ "$device_line" =~ Device:\ (.*)$ ]]; then
-                    local device="${BASH_REMATCH[1]}"
+                    device="${BASH_REMATCH[1]}"
                     interfaces+=("$device")
                     
                     if [[ "$port_name" =~ Wi-Fi|AirPort ]]; then
