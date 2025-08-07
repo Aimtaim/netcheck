@@ -30,7 +30,7 @@ check_macos_version() {
         return 0
     fi
     
-    local os_version="unknown"
+    local os_version="unknown" 
     local major="0"
     local minor="0"
     
@@ -42,13 +42,20 @@ check_macos_version() {
         fi
     fi
     
-    # macOS 10.13 oder neuer erforderlich
-    # Nur prüfen wenn wir echte numerische Werte haben
-    if [[ "$major" =~ ^[0-9]+$ ]] && [[ "$minor" =~ ^[0-9]+$ ]]; then
-        if [[ "$major" -eq 10 && "$minor" -lt 13 ]] || [[ "$major" -lt 10 ]]; then
-            log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
-        fi
-    fi
+    # Version prüfen nur für echte macOS Systeme mit numerischen Werten
+    # Verwende String-Vergleiche statt arithmetische Operationen
+    case "$major" in
+        [0-9]|[0-9][0-9])
+            case "$minor" in
+                [0-9]|[0-9][0-9])
+                    # Nur dann prüfen wenn beide numerisch sind
+                    if (( major < 10 || (major == 10 && minor < 13) )); then
+                        log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
     
     SYSTEM_INFO[os_version]="${os_version}"
     SYSTEM_INFO[os_major]="${major}"
@@ -235,24 +242,28 @@ detect_network_interfaces() {
 # =============================================================================
 
 supports_modern_wifi_api() {
-    local major="${SYSTEM_INFO[os_major]:-0}"
-    local minor="${SYSTEM_INFO[os_minor]:-0}"
+    local major="${SYSTEM_INFO[os_major]}"
+    local minor="${SYSTEM_INFO[os_minor]}"
     
     # Nur auf macOS verfügbar
     if ! is_macos; then
         return 1
     fi
     
-    # Sichere numerische Prüfung
-    if [[ ! "$major" =~ ^[0-9]+$ ]] || [[ ! "$minor" =~ ^[0-9]+$ ]]; then
+    # Sichere numerische Prüfung ohne arithmetische Operationen
+    case "$major" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    case "$minor" in  
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    
+    # Verwende (( )) für sichere arithmetische Vergleiche
+    if (( major >= 11 || (major == 10 && minor >= 14) )); then
+        return 0
+    else
         return 1
     fi
-    
-    # macOS 10.14+ hat modernere WiFi APIs
-    if [[ "$major" -ge 11 ]] || [[ "$major" -eq 10 && "$minor" -ge 14 ]]; then
-        return 0
-    fi
-    return 1
 }
 
 supports_system_profiler() {
@@ -276,7 +287,7 @@ get_legacy_wifi_tool() {
 }
 
 get_firewall_command() {
-    local major="${SYSTEM_INFO[os_major]:-0}"
+    local major="${SYSTEM_INFO[os_major]}"
     
     # Non-macOS Systeme
     if ! is_macos; then
@@ -285,11 +296,10 @@ get_firewall_command() {
     fi
     
     # macOS 11+ verwendet socketfilterfw anders
-    if [[ "$major" =~ ^[0-9]+$ ]] && [[ "$major" -ge 11 ]]; then
-        echo "socketfilterfw"
-    else
-        echo "pfctl"
-    fi
+    case "$major" in
+        [1-9][0-9]|[1-9][0-9][0-9]) [[ $major -ge 11 ]] && echo "socketfilterfw" || echo "pfctl" ;;
+        *) echo "pfctl" ;;
+    esac
 }
 
 # =============================================================================
