@@ -13,7 +13,16 @@ declare -A UI_CONFIG
 
 ui_init() {
     # Terminal-Features erkennen und UI entsprechend konfigurieren
-    if [[ "${SYSTEM_INFO[supports_color]}" == "true" ]] && [[ "$NO_COLOR" != true ]]; then
+    # Funktion zur Farbunterstützung prüfen
+    local supports_color=false
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        local colors=$(tput colors 2>/dev/null || echo 0)
+        if [[ $colors -ge 8 ]] && [[ "$NO_COLOR" != true ]]; then
+            supports_color=true
+        fi
+    fi
+    
+    if [[ "$supports_color" == true ]]; then
         # Farben definieren
         readonly RED='\033[0;31m'
         readonly GREEN='\033[0;32m'
