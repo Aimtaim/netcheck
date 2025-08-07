@@ -6,11 +6,13 @@
 
 # UI-Konfiguration basierend auf Terminal-Features
 declare -A UI_CONFIG=(
-    [use_colors]="false"
-    [use_unicode]="false"
-    [width]="80"
-    [use_progress]="true"
 )
+
+# UI_CONFIG sofort mit allen Keys initialisieren
+UI_CONFIG[use_colors]="false"
+UI_CONFIG[use_unicode]="false"
+UI_CONFIG[width]="80"
+UI_CONFIG[use_progress]="true"
 
 # =============================================================================
 # UI Initialisierung
