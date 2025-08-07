@@ -24,10 +24,8 @@ LOG_FILE=""
 LOG_LEVEL="INFO"
 
 log_init() {
-    # Nur setzen wenn noch nicht gesetzt (verhindert readonly-Fehler)
-    if [[ -z "$LOG_FILE" ]]; then
-        LOG_FILE="$1"
-    fi
+    # LOG_FILE wird in netcheck.sh gesetzt, hier nur verwenden
+    [[ -n "$1" ]] && LOG_FILE="$1"
     LOG_LEVEL="${2:-INFO}"
     
     # Log-Datei erstellen
