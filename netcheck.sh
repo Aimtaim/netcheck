@@ -187,14 +187,36 @@ done
 # =============================================================================
 
 main() {
-    # System Kompatibilität prüfen
-    #if ! is_macos; then
-    #    die "NetCheck funktioniert nur auf macOS"
-    #fi
+    # Frühe Farbinitialisierung für Fehlerbehandlung
+    if [[ -t 1 ]] && [[ "$NO_COLOR" != true ]] && command -v tput >/dev/null 2>&1; then
+        local colors=$(tput colors 2>/dev/null || echo 0)
+        if [[ $colors -ge 8 ]]; then
+            RED='\033[0;31m'
+            GREEN='\033[0;32m'
+            YELLOW='\033[1;33m'
+            BLUE='\033[0;34m'
+            NC='\033[0m'
+        fi
+    fi
     
-    #if ! check_macos_version; then
-    #    die "macOS 10.13 oder neuer erforderlich"
-    #fi
+    # System Kompatibilität prüfen
+    if ! is_macos; then
+        echo -e "${YELLOW}⚠️  WARNUNG: NetCheck ist für macOS optimiert, läuft aber auch auf anderen Unix-Systemen${NC}"
+        echo "Einige Features könnten nicht verfügbar sein oder anders funktionieren."
+        echo
+        
+        # Kurze Pause für User-Aufmerksamkeit
+        if [[ "$SILENT_MODE" != true ]]; then
+            sleep 2
+        fi
+    fi
+    
+    if ! check_macos_version; then
+        echo -e "${YELLOW}⚠️  Alte macOS-Version erkannt. Einige Features sind möglicherweise nicht verfügbar.${NC}"
+        if [[ "$SILENT_MODE" != true ]]; then
+            sleep 1
+        fi
+    fi
     
     # UI initialisieren
     ui_init
