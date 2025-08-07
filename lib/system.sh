@@ -1,100 +1,27 @@
 #!/bin/bash
 
 # =============================================================================
-# NetCheck System - Systemerkennung und Kompatibilität
+# NetCheck System - System-Erkennung und Kompatibilität (LINUX-FIX)
 # =============================================================================
 
-# System-Informationen
-declare -A SYSTEM_INFO
-
-# =============================================================================
-# macOS Erkennung und Kompatibilität
-# =============================================================================
-
-is_macos() {
-    [[ "$OSTYPE" == "darwin"* ]]
-}
-
-check_macos_version() {
-    if ! is_macos; then
-        # Non-macOS: Sichere Defaults ohne arithmetische Operationen
-        SYSTEM_INFO[os_version]="$(uname -r 2>/dev/null || echo 'unknown')"
-        SYSTEM_INFO[os_major]="0"
-        SYSTEM_INFO[os_minor]="0"
-        log_info "Non-macOS System erkannt: $(uname -s) $os_version"
-        return 0
-    fi
-    
-    # macOS Version ermitteln
-    local os_version major minor
-    os_version="unknown"
-    major="0"  
-    minor="0"
-    
-    if command -v sw_vers >/dev/null 2>&1; then
-        os_version="$(sw_vers -productVersion 2>/dev/null || echo 'unknown')"
-        if [[ "$os_version" != "unknown" ]]; then
-            local temp_major temp_minor
-            temp_major="$(echo "$os_version" | cut -d. -f1 2>/dev/null || echo '0')"
-            temp_minor="$(echo "$os_version" | cut -d. -f2 2>/dev/null || echo '0')"
-            
-            # Nur numerische Werte verwenden
-            if [[ "$temp_major" =~ ^[0-9]+$ ]]; then
-                major="$temp_major"
-            fi
-            if [[ "$temp_minor" =~ ^[0-9]+$ ]]; then
-                minor="$temp_minor"  
-            fi
-        fi
-    fi
-    
-    # Versionsprüfung für macOS (ohne arithmetische Operationen)
-    if [[ "$major" == "10" ]] && [[ "$minor" =~ ^(0|1|2|3|4|5|6|7|8|9|10|11|12)$ ]]; then
-        log_warn "Alte macOS Version: $os_version (empfohlen: 10.13+)"
-    fi
-    
-    SYSTEM_INFO[os_version]="$os_version"
-    SYSTEM_INFO[os_major]="$major"
-    SYSTEM_INFO[os_minor]="$minor"
-    
-    log_info "macOS Version erkannt: $os_version"
-    return 0
-}
-
-get_macos_codename() {
-    local os_version major minor
-    os_version="${SYSTEM_INFO[os_version]}"
-    major="${SYSTEM_INFO[os_major]}"
-    minor="${SYSTEM_INFO[os_minor]}"
-    
-    # Defaults setzen
-    [[ -z "$os_version" ]] && os_version="unknown"
-    [[ -z "$major" ]] && major="1"
-    [[ -z "$minor" ]] && minor="0"
-    
-    # Nur für macOS Codenamen
-    if ! is_macos; then
-        echo "Non-macOS ($(uname -s))"
-        return
-    fi
-    
-    if [[ "$major" =~ ^(1[1-9]|[2-9][0-9])$ ]]; then
-        case "$major" in
-            14) echo "Sonoma" ;;
-            13) echo "Ventura" ;;
-            12) echo "Monterey" ;;
-            11) echo "Big Sur" ;;
-            *) echo "Unknown ($os_version)" ;;
-        esac
-    else
-        case "$major.$minor" in
-            10.15) echo "Catalina" ;;
-            10.14) echo "Mojave" ;;
-            10.13) echo "High Sierra" ;;
-            *) echo "Unknown ($os_version)" ;;
-        esac
-    fi
-}
+# System-Info Array initialisieren
+declare -A SYSTEM_INFO=(
+    [hostname]=""
+    [os_version]=""
+    [architecture]=""
+    [model]=""
+    [uptime]=""
+    [os_major]="0"
+    [os_minor]="0"
+    [primary_interface]=""
+    [wifi_interfaces]=""
+    [ethernet_interfaces]=""
+    [all_interfaces]=""
+    [terminal_width]="80"
+    [supports_color]="false"
+    [supports_unicode]="false"
+    [supports_progress]="true"
+)
 
 # =============================================================================
 # System-Informationen sammeln
@@ -103,290 +30,279 @@ get_macos_codename() {
 system_gather_info() {
     log_info "Sammle System-Informationen..."
     
-    # Variablen initialisieren
-    local hostname username uptime architecture
-    local model cpu memory
+    # Hostname
+    SYSTEM_INFO[hostname]=$(hostname 2>/dev/null || echo "unknown")
     
-    # Basic System Info
-    hostname=$(hostname 2>/dev/null || echo "unknown")
-    username=$(whoami 2>/dev/null || echo "unknown")
-    uptime=$(uptime 2>/dev/null | awk '{print $3,$4}' | sed 's/,//' || echo "unknown")
-    architecture=$(uname -m 2>/dev/null || echo "unknown")
-    
-    SYSTEM_INFO[hostname]="$hostname"
-    SYSTEM_INFO[username]="$username"
-    SYSTEM_INFO[uptime]="$uptime"
-    SYSTEM_INFO[architecture]="$architecture"
-    
-    # Hardware Info
-    if command -v system_profiler &> /dev/null; then
-        model=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | cut -d: -f2 | trim || echo "Unknown")
-        SYSTEM_INFO[model]="${model:-Unknown}"
+    # OS Version
+    if is_macos; then
+        SYSTEM_INFO[os_version]=$(sw_vers -productVersion 2>/dev/null || echo "macOS-unknown")
+        SYSTEM_INFO[model]=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | cut -d: -f2 | xargs || echo "Mac")
         
-        cpu=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Processor Name" | cut -d: -f2 | trim || echo "Unknown")
-        SYSTEM_INFO[cpu]="${cpu:-Unknown}"
-        
-        memory=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Memory" | cut -d: -f2 | trim || echo "Unknown")
-        SYSTEM_INFO[memory]="${memory:-Unknown}"
+        # macOS Version parsen
+        local version="${SYSTEM_INFO[os_version]}"
+        if [[ "$version" =~ ^([0-9]+)\.([0-9]+) ]]; then
+            SYSTEM_INFO[os_major]="${BASH_REMATCH[1]}"
+            SYSTEM_INFO[os_minor]="${BASH_REMATCH[2]}"
+        fi
     else
-        log_warn "system_profiler nicht verfügbar, Hardware-Info begrenzt"
-        SYSTEM_INFO[model]="Unknown"
-        SYSTEM_INFO[cpu]="Unknown"
-        SYSTEM_INFO[memory]="Unknown"
+        # Linux
+        if [[ -f /etc/os-release ]]; then
+            SYSTEM_INFO[os_version]=$(grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d'"' -f2 || echo "Linux")
+        else
+            SYSTEM_INFO[os_version]=$(uname -sr 2>/dev/null || echo "Linux")
+        fi
+        
+        SYSTEM_INFO[model]=$(uname -m 2>/dev/null || echo "Linux-System")
+        SYSTEM_INFO[os_major]="0"
+        SYSTEM_INFO[os_minor]="0"
     fi
     
-    # Terminal Capabilities
-    detect_terminal_capabilities
+    # Architektur
+    SYSTEM_INFO[architecture]=$(uname -m 2>/dev/null || echo "unknown")
     
-    # Netzwerk Interfaces
-    detect_network_interfaces
+    # Uptime
+    if command -v uptime >/dev/null 2>&1; then
+        SYSTEM_INFO[uptime]=$(uptime 2>/dev/null | cut -d',' -f1 | sed 's/.*up //' || echo "unknown")
+    else
+        SYSTEM_INFO[uptime]="unknown"
+    fi
     
-    log_info "System-Info gesammelt: ${SYSTEM_INFO[model]} (${SYSTEM_INFO[os_version]})"
+    # Netzwerk-Interfaces sammeln
+    gather_network_interfaces
+    
+    # Terminal-Features
+    detect_terminal_features
+    
+    log_info "System-Info: ${SYSTEM_INFO[os_version]} auf ${SYSTEM_INFO[architecture]}"
 }
 
-detect_terminal_capabilities() {
-    # Variablen initialisieren
-    local terminal_width terminal_height
-    
-    # Farben
-    if [[ -t 1 ]] && [[ "${TERM:-}" != "dumb" ]] && [[ "$NO_COLOR" != true ]]; then
-        SYSTEM_INFO[supports_color]="true"
-    else
-        SYSTEM_INFO[supports_color]="false"
-    fi
-    
-    # Unicode
-    if [[ "${LANG:-}" =~ UTF-8 ]] || [[ "${LC_ALL:-}" =~ UTF-8 ]]; then
-        SYSTEM_INFO[supports_unicode]="true"
-    else
-        SYSTEM_INFO[supports_unicode]="false"
-    fi
-    
-    # Progress Bars
-    if [[ -t 1 ]] && [[ "$NO_PROGRESS" != true ]]; then
-        SYSTEM_INFO[supports_progress]="true"
-    else
-        SYSTEM_INFO[supports_progress]="false"
-    fi
-    
-    # Terminal Größe
-    if command -v tput &> /dev/null; then
-        terminal_width=$(tput cols 2>/dev/null || echo "80")
-        terminal_height=$(tput lines 2>/dev/null || echo "24")
-        SYSTEM_INFO[terminal_width]="$terminal_width"
-        SYSTEM_INFO[terminal_height]="$terminal_height"
-    else
-        SYSTEM_INFO[terminal_width]="80"
-        SYSTEM_INFO[terminal_height]="24"
-    fi
-    
-    log_debug "Terminal: Farben=${SYSTEM_INFO[supports_color]}, Unicode=${SYSTEM_INFO[supports_unicode]}, Größe=${SYSTEM_INFO[terminal_width]}x${SYSTEM_INFO[terminal_height]}"
-}
+# =============================================================================
+# Netzwerk-Interfaces
+# =============================================================================
 
-detect_network_interfaces() {
-    local interfaces=()
+gather_network_interfaces() {
+    local all_interfaces=()
     local wifi_interfaces=()
     local ethernet_interfaces=()
-    local port_name device
     
-    # Alle Hardware Ports scannen
-    if command -v networksetup &> /dev/null; then
+    if is_macos; then
+        # macOS Interface-Erkennung
         while IFS= read -r line; do
-            if [[ "$line" =~ Hardware\ Port:\ (.*)$ ]]; then
-                port_name="${BASH_REMATCH[1]}"
-                read -r device_line
-                if [[ "$device_line" =~ Device:\ (.*)$ ]]; then
-                    device="${BASH_REMATCH[1]}"
-                    interfaces+=("$device")
-                    
-                    if [[ "$port_name" =~ Wi-Fi|AirPort ]]; then
-                        wifi_interfaces+=("$device")
-                    elif [[ "$port_name" =~ Ethernet|Thunderbolt|USB ]]; then
-                        ethernet_interfaces+=("$device")
-                    fi
+            if [[ "$line" =~ Hardware\ Port:\ Wi-Fi.*Device:\ (.*) ]]; then
+                local interface="${BASH_REMATCH[1]}"
+                wifi_interfaces+=("$interface")
+                all_interfaces+=("$interface")
+                
+                if [[ -z "${SYSTEM_INFO[primary_interface]}" ]] && is_interface_active "$interface"; then
+                    SYSTEM_INFO[primary_interface]="$interface"
+                fi
+            elif [[ "$line" =~ Hardware\ Port:\ Ethernet.*Device:\ (.*) ]]; then
+                local interface="${BASH_REMATCH[1]}"
+                ethernet_interfaces+=("$interface")
+                all_interfaces+=("$interface")
+                
+                if [[ -z "${SYSTEM_INFO[primary_interface]}" ]] && is_interface_active "$interface"; then
+                    SYSTEM_INFO[primary_interface]="$interface"
                 fi
             fi
         done < <(networksetup -listallhardwareports 2>/dev/null || echo "")
     else
-        # Fallback für Non-macOS: Verwende Standard-Interfaces
-        for iface in eth0 eth1 wlan0 wlan1 enp0s3 enp0s8; do
-            if [[ -d "/sys/class/net/$iface" ]]; then
-                interfaces+=("$iface")
-                if [[ "$iface" =~ wlan|wlp ]]; then
-                    wifi_interfaces+=("$iface")
+        # Linux Interface-Erkennung
+        for interface in /sys/class/net/*; do
+            if [[ -d "$interface" ]]; then
+                local iface_name=$(basename "$interface")
+                
+                # Skip loopback
+                [[ "$iface_name" == "lo" ]] && continue
+                
+                all_interfaces+=("$iface_name")
+                
+                # WiFi vs Ethernet unterscheiden
+                if [[ "$iface_name" =~ ^(wlan|wlp|wifi) ]] || [[ -d "$interface/wireless" ]]; then
+                    wifi_interfaces+=("$iface_name")
                 else
-                    ethernet_interfaces+=("$iface")
+                    ethernet_interfaces+=("$iface_name")
+                fi
+                
+                # Primary Interface setzen (erstes aktives)
+                if [[ -z "${SYSTEM_INFO[primary_interface]}" ]] && is_interface_active "$iface_name"; then
+                    SYSTEM_INFO[primary_interface]="$iface_name"
                 fi
             fi
         done
     fi
     
-    # Als komma-separierte Strings speichern
-    SYSTEM_INFO[all_interfaces]=$(IFS=','; echo "${interfaces[*]}")
+    # Arrays zu Strings
+    SYSTEM_INFO[all_interfaces]=$(IFS=','; echo "${all_interfaces[*]}")
     SYSTEM_INFO[wifi_interfaces]=$(IFS=','; echo "${wifi_interfaces[*]}")
     SYSTEM_INFO[ethernet_interfaces]=$(IFS=','; echo "${ethernet_interfaces[*]}")
     
-    # Primary Interface bestimmen
-    local primary
-    if primary=$(get_primary_interface); then
-        SYSTEM_INFO[primary_interface]="$primary"
-        log_info "Primäres Interface: $primary"
-    else
-        SYSTEM_INFO[primary_interface]=""
-        add_issue "critical" "network" "Kein aktives Netzwerk-Interface gefunden" true
+    # Fallback für Primary Interface
+    if [[ -z "${SYSTEM_INFO[primary_interface]}" ]] && [[ ${#all_interfaces[@]} -gt 0 ]]; then
+        SYSTEM_INFO[primary_interface]="${all_interfaces[0]}"
     fi
     
-    log_debug "Interfaces: All=${SYSTEM_INFO[all_interfaces]}, WiFi=${SYSTEM_INFO[wifi_interfaces]}, Ethernet=${SYSTEM_INFO[ethernet_interfaces]}"
+    log_debug "Gefundene Interfaces: ${SYSTEM_INFO[all_interfaces]}"
+    log_debug "Primary Interface: ${SYSTEM_INFO[primary_interface]}"
 }
 
 # =============================================================================
-# macOS Version-spezifische Features
+# Terminal-Features erkennen
+# =============================================================================
+
+detect_terminal_features() {
+    # Terminal-Breite
+    if command -v tput >/dev/null 2>&1; then
+        SYSTEM_INFO[terminal_width]=$(tput cols 2>/dev/null || echo "80")
+    else
+        SYSTEM_INFO[terminal_width]="80"
+    fi
+    
+    # Farb-Unterstützung
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        local colors=$(tput colors 2>/dev/null || echo "0")
+        if [[ "$colors" -ge 8 ]] && [[ "${NO_COLOR:-}" != "true" ]]; then
+            SYSTEM_INFO[supports_color]="true"
+        fi
+    fi
+    
+    # Unicode-Unterstützung (einfache Heuristik)
+    if [[ "${LANG:-}" =~ UTF-8 ]] || [[ "${LC_ALL:-}" =~ UTF-8 ]]; then
+        SYSTEM_INFO[supports_unicode]="true"
+    fi
+    
+    # Progress-Bar Unterstützung
+    if [[ -t 1 ]] && [[ "${SYSTEM_INFO[terminal_width]}" -gt 60 ]]; then
+        SYSTEM_INFO[supports_progress]="true"
+    else
+        SYSTEM_INFO[supports_progress]="false"
+    fi
+}
+
+# =============================================================================
+# Plattform-Erkennung
+# =============================================================================
+
+is_macos() {
+    [[ "$OSTYPE" == "darwin"* ]]
+}
+
+is_linux() {
+    [[ "$OSTYPE" == "linux"* ]] || [[ "$(uname -s 2>/dev/null)" == "Linux" ]]
+}
+
+check_macos_version() {
+    if ! is_macos; then
+        return 0  # Für Non-macOS immer OK
+    fi
+    
+    local version="${SYSTEM_INFO[os_version]}"
+    if [[ "$version" =~ ^([0-9]+)\.([0-9]+) ]]; then
+        local major="${BASH_REMATCH[1]}"
+        local minor="${BASH_REMATCH[2]}"
+        
+        # macOS 10.13+ erforderlich
+        if [[ "$major" -gt 10 ]] || [[ "$major" -eq 10 && "$minor" -ge 13 ]]; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# =============================================================================
+# Tool-Verfügbarkeit
 # =============================================================================
 
 supports_modern_wifi_api() {
-    local major minor
-    major="${SYSTEM_INFO[os_major]}"
-    minor="${SYSTEM_INFO[os_minor]}"
-    
-    # Nur auf macOS verfügbar
     if ! is_macos; then
-        return 1
+        return 1  # Linux hat andere WiFi-APIs
     fi
     
-    # Defaults und Validierung
-    [[ -z "$major" ]] && major="0"
-    [[ -z "$minor" ]] && minor="0"
-    
-    # Prüfung ob numerisch
-    [[ ! "$major" =~ ^[0-9]+$ ]] && return 1
-    [[ ! "$minor" =~ ^[0-9]+$ ]] && return 1
-    
-    # Version-Check ohne arithmetische Operationen
-    if [[ "$major" =~ ^(1[1-9]|[2-9][0-9])$ ]]; then
-        return 0  # macOS 11+
-    elif [[ "$major" == "10" ]]; then
-        if [[ "$minor" =~ ^(1[4-9]|[2-9][0-9])$ ]]; then
-            return 0  # macOS 10.14+
-        fi
-    fi
-    
-    return 1
-}
-
-supports_system_profiler() {
-    command -v system_profiler &> /dev/null
+    command -v wdutil >/dev/null 2>&1
 }
 
 get_legacy_wifi_tool() {
-    # Für ältere macOS Versionen
-    if [[ -x "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport" ]]; then
-        echo "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
-        return 0
+    local airport_paths=(
+        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+        "/usr/local/bin/airport"
+    )
+    
+    for path in "${airport_paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# =============================================================================
+# Interface-Hilfsfunktionen  
+# =============================================================================
+
+is_interface_active() {
+    local interface="$1"
+    
+    if [[ -z "$interface" ]]; then
+        return 1
     fi
     
-    # Homebrew Installation
-    if command -v airport &> /dev/null; then
-        echo "airport"
-        return 0
+    if is_macos; then
+        ifconfig "$interface" 2>/dev/null | grep -q "status: active"
+    else
+        # Linux: Interface ist "up" und hat IP
+        if ip link show "$interface" 2>/dev/null | grep -q "state UP"; then
+            return 0
+        fi
+        # Fallback: ifconfig
+        if ifconfig "$interface" 2>/dev/null | grep -q "UP"; then
+            return 0
+        fi
     fi
     
     return 1
 }
 
-get_firewall_command() {
-    local major="${SYSTEM_INFO[os_major]}"
+# =============================================================================
+# System-spezifische Varianten
+# =============================================================================
+
+parse_test_results() {
+    local test_results="$1"
     
-    # Non-macOS Systeme
-    if ! is_macos; then
-        echo "iptables"
-        return
+    # Issues aus Testergebnissen extrahieren
+    if command -v jq >/dev/null 2>&1; then
+        echo "$test_results" | jq '[.[] | select(.status == "error" or .status == "critical" or .status == "warning")]' 2>/dev/null || echo "[]"
+    else
+        # Fallback ohne jq
+        local issues_json="["
+        local first=true
+        
+        for issue in "${NETCHECK_ISSUES[@]}"; do
+            if [[ "$first" != "true" ]]; then
+                issues_json+=","
+            fi
+            issues_json+="$issue"
+            first=false
+        done
+        
+        issues_json+="]"
+        echo "$issues_json"
     fi
-    
-    # macOS 11+ verwendet socketfilterfw anders
-    case "$major" in
-        [1-9][0-9]|[1-9][0-9][0-9]) [[ $major -ge 11 ]] && echo "socketfilterfw" || echo "pfctl" ;;
-        *) echo "pfctl" ;;
-    esac
 }
 
 # =============================================================================
-# Hardware-spezifische Erkennung
+# Debug-Informationen
 # =============================================================================
 
-is_apple_silicon() {
-    [[ "${SYSTEM_INFO[architecture]}" == "arm64" ]]
-}
-
-get_network_hardware_info() {
-    if ! supports_system_profiler; then
-        return 1
+system_debug_info() {
+    if [[ "${LOG_LEVEL}" == "DEBUG" ]]; then
+        log_debug "=== SYSTEM DEBUG ==="
+        for key in "${!SYSTEM_INFO[@]}"; do
+            log_debug "SYSTEM_INFO[$key]=${SYSTEM_INFO[$key]}"
+        done
+        log_debug "===================="
     fi
-    
-    local network_info
-    network_info=$(system_profiler SPNetworkDataType 2>/dev/null) || return 1
-    
-    # WiFi Hardware
-    if echo "$network_info" | grep -q "Wi-Fi"; then
-        SYSTEM_INFO[has_wifi_hardware]="true"
-        local wifi_card
-        wifi_card=$(echo "$network_info" | grep -A5 "Wi-Fi" | grep "Card Type" | cut -d: -f2 | trim)
-        SYSTEM_INFO[wifi_hardware]="${wifi_card:-Unknown}"
-    else
-        SYSTEM_INFO[has_wifi_hardware]="false"
-        SYSTEM_INFO[wifi_hardware]="None"
-    fi
-    
-    # Ethernet Hardware
-    if echo "$network_info" | grep -q "Ethernet"; then
-        SYSTEM_INFO[has_ethernet_hardware]="true"
-    else
-        SYSTEM_INFO[has_ethernet_hardware]="false"
-    fi
-    
-    log_debug "Hardware: WiFi=${SYSTEM_INFO[has_wifi_hardware]} (${SYSTEM_INFO[wifi_hardware]}), Ethernet=${SYSTEM_INFO[has_ethernet_hardware]}"
-}
-
-# =============================================================================
-# System Health Check
-# =============================================================================
-
-check_system_health() {
-    local health_score=0
-    local max_score=10
-    
-    # Disk Space
-    local available_space
-    available_space=$(df -h / | tail -1 | awk '{print $4}' | sed 's/G.*$//')
-    if [[ ${available_space%.*} -gt 5 ]]; then
-        ((health_score++))
-    else
-        add_issue "warning" "system" "Wenig freier Speicherplatz: ${available_space}GB" false
-    fi
-    
-    # Memory Pressure
-    if command -v memory_pressure &> /dev/null; then
-        local memory_pressure
-        memory_pressure=$(memory_pressure | head -1)
-        if [[ "$memory_pressure" =~ "Memory pressure: Normal" ]]; then
-            ((health_score++))
-        else
-            add_issue "warning" "system" "Speicherdruck erkannt: $memory_pressure" false
-        fi
-    else
-        ((health_score++)) # Annahme: OK wenn Tool nicht verfügbar
-    fi
-    
-    # Load Average
-    local load_avg
-    load_avg=$(uptime | awk '{print $10}' | sed 's/,//')
-    if (( $(echo "$load_avg < 2.0" | bc -l 2>/dev/null || echo 1) )); then
-        ((health_score++))
-    else
-        add_issue "info" "system" "Hohe CPU-Last: $load_avg" false
-    fi
-    
-    SYSTEM_INFO[health_score]="$health_score"
-    SYSTEM_INFO[max_health_score]="$max_score"
-    
-    log_info "System Health Score: $health_score/$max_score"
 }
