@@ -13,16 +13,25 @@ declare -a NETCHECK_TEST_RESULTS=()
 # =============================================================================
 
 # Diese Variablen werden ggf. durch das Hauptskript gesetzt
-LOG_LEVEL="INFO"
-
 log_init() {
-    LOG_LEVEL="${2:-INFO}"
+    local level="${2:-INFO}"
+    LOG_LEVEL="$level"
 
+    # Prüfen, ob LOG_FILE überhaupt gesetzt ist
     if [[ -z "${LOG_FILE:-}" ]]; then
-        echo "FEHLER: LOG_FILE wurde nicht gesetzt." >&2
+        echo "FEHLER: LOG_FILE ist nicht definiert oder readonly." >&2
         exit 1
     fi
 
+    # Log-Datei erstellen
+    cat > "$LOG_FILE" << EOF
+# NetCheck Log - $(date '+%Y-%m-%d %H:%M:%S')
+# Version: ${VERSION:-unknown}
+# System: $(uname -a)
+# User: $(whoami)
+# PID: $$
+EOF
+}
 
 log_message() {
     local level="$1"
