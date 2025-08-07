@@ -16,8 +16,13 @@ is_macos() {
 }
 
 check_macos_version() {
+    # Auch auf Non-macOS basic info sammeln
     if ! is_macos; then
-        return 1
+        SYSTEM_INFO[os_version]="$(uname -r)"
+        SYSTEM_INFO[os_major]="0"
+        SYSTEM_INFO[os_minor]="0"
+        log_info "Non-macOS System erkannt: $(uname -s) $(uname -r)"
+        return 0
     fi
     
     local version
@@ -28,8 +33,8 @@ check_macos_version() {
     
     # macOS 10.13 oder neuer erforderlich
     if [[ $major -eq 10 && $minor -lt 13 ]] || [[ $major -lt 10 ]]; then
-        log_error "Nicht unterstützte macOS Version: $version (mindestens 10.13 erforderlich)"
-        return 1
+        log_warn "Alte macOS Version: $version (empfohlen: 10.13+)"
+        return 0
     fi
     
     SYSTEM_INFO[os_version]="$version"
