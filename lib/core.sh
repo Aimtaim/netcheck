@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # =============================================================================
-# NetCheck Core - Grundlegende Funktionen und Utilities
+# Globale Arrays für Ergebnisse
 # =============================================================================
 
-# Globale Arrays für Ergebnisse
 declare -a NETCHECK_ISSUES=()
 declare -a NETCHECK_FIXES=()
 declare -a NETCHECK_TEST_RESULTS=()
@@ -13,19 +12,25 @@ declare -a NETCHECK_TEST_RESULTS=()
 # Logging System
 # =============================================================================
 
+# Diese Variablen werden ggf. durch das Hauptskript gesetzt
 LOG_FILE=""
 LOG_LEVEL="INFO"
 
 log_init() {
-    if [[ -z "$LOG_FILE" ]]; then
+    # Wenn LOG_FILE bereits durch das Hauptskript gesetzt wurde (z. B. readonly), dann nicht erneut setzen
+    if [[ -z "${LOG_FILE}" ]]; then
         LOG_FILE="$1"
     fi
 
-    
+    # Log-Level ggf. überschreiben (optional)
+    if [[ -n "${2:-}" ]]; then
+        LOG_LEVEL="$2"
+    fi
+
     # Log-Datei erstellen
     cat > "$LOG_FILE" << EOF
 # NetCheck Log - $(date '+%Y-%m-%d %H:%M:%S')
-# Version: $VERSION
+# Version: ${VERSION:-unknown}
 # System: $(uname -a)
 # User: $(whoami)
 # PID: $$
