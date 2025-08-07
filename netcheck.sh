@@ -7,8 +7,6 @@
 # Lizenz: MIT
 # =============================================================================
 
-set -euo pipefail
-
 # Globale Variablen
 readonly VERSION="2.0.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
