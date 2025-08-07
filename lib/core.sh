@@ -4,6 +4,31 @@
 # NetCheck Core - Grundlegende Funktionen und Utilities
 # =============================================================================
 
+# Farben initialisieren (werden später überschrieben)
+RED=''
+GREEN=''
+YELLOW=''
+BLUE=''
+CYAN=''
+WHITE=''
+GRAY=''
+NC=''
+BOLD=''
+DIM=''
+
+# Icons initialisieren (werden später überschrieben)
+ICON_CHECK="[OK]"
+ICON_ERROR="[!!]"
+ICON_WARNING="[**]"
+ICON_INFO="[--]"
+ICON_ARROW="-->"
+ICON_GEAR="[*]"
+ICON_WIFI="WiFi"
+ICON_NETWORK="Net"
+ICON_ROCKET="[^]"
+ICON_WRENCH="[+]"
+ICON_SPARKLES="[*]"
+
 # Globale Arrays für Ergebnisse
 declare -a NETCHECK_ISSUES=()
 declare -a NETCHECK_FIXES=()
