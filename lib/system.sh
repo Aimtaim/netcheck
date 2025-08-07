@@ -118,9 +118,9 @@ gather_network_interfaces() {
                 all_interfaces+=("$iface_name")
                 
                 # WiFi vs Ethernet unterscheiden
-                if [[ "$iface_name" =~ ^(wlan|wlp|wifi) ]] || [[ -d "$interface/wireless" ]]; then
+                if [[ "$iface_name" =~ ^(wlan|wlp|wifi|wlo) ]] || [[ -d "$interface/wireless" ]]; then
                     wifi_interfaces+=("$iface_name")
-                else
+                elif [[ "$iface_name" =~ ^(eth|enp|eno|ens) ]]; then
                     ethernet_interfaces+=("$iface_name")
                 fi
                 
@@ -184,11 +184,11 @@ detect_terminal_features() {
 # =============================================================================
 
 is_macos() {
-    [[ "$OSTYPE" == "darwin"* ]]
+    [[ "$OSTYPE" == "darwin"* ]] || [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]
 }
 
 is_linux() {
-    [[ "$OSTYPE" == "linux"* ]] || [[ "$(uname -s 2>/dev/null)" == "Linux" ]]
+    [[ "$OSTYPE" == "linux"* ]] || [[ "$(uname -s 2>/dev/null)" == "Linux" ]] || [[ ! "$OSTYPE" == "darwin"* && -f /etc/os-release ]]
 }
 
 check_macos_version() {
@@ -253,16 +253,14 @@ is_interface_active() {
         ifconfig "$interface" 2>/dev/null | grep -q "status: active"
     else
         # Linux: Interface ist "up" und hat IP
-        if ip link show "$interface" 2>/dev/null | grep -q "state UP"; then
-            return 0
-        fi
-        # Fallback: ifconfig
-        if ifconfig "$interface" 2>/dev/null | grep -q "UP"; then
+        if command -v ip >/dev/null 2>&1; then
+            ip link show "$interface" 2>/dev/null | grep -q "state UP"
+        elif command -v ifconfig >/dev/null 2>&1; then
+            ifconfig "$interface" 2>/dev/null | grep -q "UP.*RUNNING"
+        else
             return 0
         fi
     fi
-    
-    return 1
 }
 
 # =============================================================================
