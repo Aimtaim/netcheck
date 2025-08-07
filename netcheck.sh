@@ -188,13 +188,13 @@ done
 
 main() {
     # System Kompatibilität prüfen
-    if ! is_macos; then
-        die "NetCheck funktioniert nur auf macOS"
-    fi
+    #if ! is_macos; then
+    #    die "NetCheck funktioniert nur auf macOS"
+    #fi
     
-    if ! check_macos_version; then
-        die "macOS 10.13 oder neuer erforderlich"
-    fi
+    #if ! check_macos_version; then
+    #    die "macOS 10.13 oder neuer erforderlich"
+    #fi
     
     # UI initialisieren
     ui_init
