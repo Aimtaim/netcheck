@@ -17,14 +17,13 @@ LOG_FILE=""
 LOG_LEVEL="INFO"
 
 log_init() {
-    # Wenn LOG_FILE bereits durch das Hauptskript gesetzt wurde (z. B. readonly), dann nicht erneut setzen
-    if [[ -z "${LOG_FILE}" ]]; then
-        LOG_FILE="$1"
-    fi
+    local level="${2:-INFO}"
+    LOG_LEVEL="$level"
 
-    # Log-Level ggf. überschreiben (optional)
-    if [[ -n "${2:-}" ]]; then
-        LOG_LEVEL="$2"
+    # Prüfen, ob LOG_FILE überhaupt gesetzt ist
+    if [[ -z "${LOG_FILE:-}" ]]; then
+        echo "FEHLER: LOG_FILE ist nicht definiert oder readonly." >&2
+        exit 1
     fi
 
     # Log-Datei erstellen
